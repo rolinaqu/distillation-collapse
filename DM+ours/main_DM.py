@@ -16,14 +16,10 @@ from utils import get_loops, get_dataset, get_network, get_eval_pool, evaluate_s
 from torchvision.utils import save_image, make_grid
 import torch.nn.functional as F
 import torchvision
-#import wandb
 
 #import cka_loss
 
 def main():
-
-
-    #
     
     parser = argparse.ArgumentParser(description='Parameter Processing')
     parser.add_argument('--dataset', type=str, default='CIFAR10', help='dataset')
@@ -56,22 +52,6 @@ def main():
 
     if not os.path.exists(args.save_path):
         os.mkdir(args.save_path)
-
-    #####wandb init
-    '''wandb.init(sync_tensorboard=False,
-            project="dm",
-            job_type="vit",
-            tags=["vit"],
-            config=args,
-            name="vit  ipc:10" 
-            )
-
-
-    arti_code = wandb.Artifact('py', type='code')
-    arti_code.add_file('main_DM.py')
-    arti_code.add_file('networks.py')
-    arti_code.add_file('utils.py')
-    wandb.log_artifact(arti_code)'''
 
     eval_it_pool = np.arange(0, args.Iteration+1, 2000).tolist() if args.eval_mode == 'S' or args.eval_mode == 'SS' else [args.Iteration] # The list of iterations when we evaluate models and record results.
     eval_it_pool = [500,2000,5000,10000,20000]
@@ -260,9 +240,6 @@ def main():
                 loss_ori += torch.sum((torch.mean(output_real.reshape(num_classes, args.batch_real, -1), dim=1) - torch.mean(output_syn.reshape(num_classes, args.ipc, -1), dim=1))**2)
      
             loss=loss_ori
-            '''wandb.log({"ori_loss/epoch:{}".format(exp): loss_ori.detach().cpu(),
-                        "total_loss/epoch:{}".format(exp): loss.detach().cpu(),
-                        "epoch":exp})'''
 
             optimizer_img.zero_grad()
             loss.backward()
