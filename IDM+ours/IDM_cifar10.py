@@ -322,8 +322,8 @@ def main():
                                 # print("------")
                                 # print(img_syn.size())
                                 # torch.Size([40, 3, 32, 32])
-                                output_real = embed(img_real, last=args.embed_last)
-                                output_syn = embed(img_syn, last=args.embed_last)
+                                output_real = torch.tensor(embed(img_real, last=args.embed_last))
+                                output_syn = torch.tensor(embed(img_syn, last=args.embed_last))
 
                                 loss_c += torch.sum((torch.mean(output_real, dim=0) - torch.mean(output_syn, dim=0))**2)
 
