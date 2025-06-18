@@ -13,7 +13,6 @@ from utils import get_loops, get_dataset, get_network, get_eval_pool, evaluate_s
 from torchvision.utils import save_image, make_grid
 import torch.nn.functional as F
 import torchvision
-#import wandb
 from utils import get_premodel
 def main():
     parser = argparse.ArgumentParser(description='Parameter Processing')
@@ -22,7 +21,7 @@ def main():
     parser.add_argument('--dsa_strategy', type=str, default='color_crop_cutout_flip_scale_rotate', help='differentiable Siamese augmentation strategy')
     parser.add_argument('--data_path', type=str, default='data', help='dataset path')
     parser.add_argument('--save_path', type=str, default='result', help='path to save results')
-    parser.add_argument('--num_premodels', type=int, default=1000, help='path to save results')
+    parser.add_argument('--num_premodels', type=int, default=100, help='path to save results')
     parser.add_argument('--pre_epochs', type=int, default=40, help='path to save results')
     # To decrease train time, we can set smaller "pre_epochs" and num_premodels""
     parser.add_argument('--lr_net', type=float, default=0.01, help='learning rate for updating network parameters')
