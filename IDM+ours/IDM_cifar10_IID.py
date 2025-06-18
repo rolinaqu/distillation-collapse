@@ -74,8 +74,10 @@ def main():
     args = parser.parse_args()
     # args.outer_loop, args.inner_loop = get_loops(args.ipc)
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    if torch.cuda.is_available(): print("GPU speedup enabled, cuda is available") 
-    else: print("GPU NOT AVAILABLE, USING CPU!")
+    if torch.cuda.is_available(): 
+    	print("GPU speedup enabled, cuda is available") 
+    else: 
+    	print("GPU NOT AVAILABLE, USING CPU!")
 
     args.dsa_param = ParamDiffAug()
     args.dsa = False if args.dsa_strategy in ['none', 'None'] else True
@@ -284,7 +286,7 @@ def main():
 
                 
                 #expecting one model, getting another. it is Not Happy About This (line 307 is the problem causer but this starts the problem here)
-                #net_res = get_network("ResNet18", channel, num_classes, im_size).to(args.device) 
+                net_res = get_network("ResNet18", channel, num_classes, im_size).to(args.device) 
                 #print("TESTING LOAD OF NC RESNET18")
                 #net_res = testload.resnet18().to(args.device)
                 # get a random model

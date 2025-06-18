@@ -686,7 +686,7 @@ AUGMENT_FNS = {
 
 
 import  random
-def get_premodel(model_path=r"\DM_pre_dict"):
+def get_premodel(model_path=r"/users/PAS2138/rolinaqu/2025 URAP Research/Code/IID/IDM+ours/DM_pre_dict/"):
     model_list=os.listdir(model_path)
     n=len(model_list)
     idx=random.randint(0, n-1)
