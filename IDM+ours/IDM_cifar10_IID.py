@@ -285,11 +285,11 @@ def main():
                 
                 #expecting one model, getting another. it is Not Happy About This (line 307 is the problem causer but this starts the problem here)
                 #net_res = get_network("ResNet18", channel, num_classes, im_size).to(args.device) 
-                print("TESTING LOAD OF NC RESNET18")
-                net_res = testload.resnet18().to(args.device)
+                #print("TESTING LOAD OF NC RESNET18")
+                #net_res = testload.resnet18().to(args.device)
                 # get a random model
-                #net_path=get_premodel()
-                net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
+                net_path=get_premodel()
+                #net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
 
                 state_dict = torch.load(net_path, map_location = 'cpu')
                 new_state_dict = {}

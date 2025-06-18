@@ -686,8 +686,18 @@ AUGMENT_FNS = {
 
 
 import  random
-def get_premodel(model_path=r"\nn_models"):
+def get_premodel(model_path=r"\DM_pre_dict"):
     model_list=os.listdir(model_path)
     n=len(model_list)
     idx=random.randint(0, n-1)
     return model_path+'/'+model_list[idx]
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
