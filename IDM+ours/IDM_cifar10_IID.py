@@ -12,7 +12,6 @@ from dc_utils import get_network, get_eval_pool, evaluate_synset, get_time, epoc
 import torchnet
 import torch.nn.functional as F
 import pickle
-#import wandb
 from utils import get_dataset as get_dataset_mtt
 from utils import get_premodel
 import torchvision
@@ -75,6 +74,9 @@ def main():
     args = parser.parse_args()
     # args.outer_loop, args.inner_loop = get_loops(args.ipc)
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if torch.cuda.is_available(): print("GPU speedup enabled, cuda is available") 
+    else: print("GPU NOT AVAILABLE, USING CPU!")
+
     args.dsa_param = ParamDiffAug()
     args.dsa = False if args.dsa_strategy in ['none', 'None'] else True
 
@@ -83,8 +85,6 @@ def main():
 
     if not os.path.exists(args.save_path):
         os.mkdir(args.save_path)
-
-    #####wandb init
     
     eval_it_pool = np.arange(0, args.Iteration+1, args.eval_interval).tolist() if args.eval_mode == 'S' or args.eval_mode == 'SS' else [args.Iteration] # The list of iterations when we evaluate models and record results.
     eval_it_pool = [2000,5000,10000,20000]
@@ -203,10 +203,7 @@ def main():
                         _, acc_train, acc_test = evaluate_synset(it_eval, net_eval, image_syn_eval, label_syn_eval, testloader, args)
                         accs.append(acc_test)
                     print('Evaluate %d random %s, mean = %.4f std = %.4f\n-------------------------'%(len(accs), model_eval, np.mean(accs), np.std(accs)))
-                    
-                    ###log 
-                    #wandb.log({'Accuracy/eval:{}/epoch:{}'.format(model_eval,exp): np.mean(accs),'Max_Accuracy/eval:{}/epoch:{}'.format(model_eval,exp): best_acc,"epoch":exp},commit=False)
-                    
+                
                     
                     if it == args.Iteration: # record the final results
                         accs_all_exps[model_eval] += accs
@@ -233,9 +230,6 @@ def main():
                 image_syn_vis[image_syn_vis<0] = 0.0
                 image_syn_vis[image_syn_vis>1] = 1.0
                 
-                ##log image
-                grid = torchvision.utils.make_grid(image_syn_vis_log, nrow=10, normalize=True, scale_each=True)
-                #wandb.log({'Synthetic_Images/epoch:{}'.format(exp): wandb.Image(grid.detach().cpu()),'epoch':exp})
                 
                 save_image(image_syn_vis, save_name, nrow=args.ipc) # Trying normalize = True/False may get better visual effects.
 
@@ -419,12 +413,6 @@ def main():
                     raise NotImplemented()
 
                 loss_avg /= (num_classes)
-                #wandb.log({
-                 #   "total_loss/epoch:{}".format(exp): loss.detach().cpu(),
-                  #  "avg_loss/epoch:{}".format(exp): int(loss_avg),
-                   # "cov_loss/epoch:{}".format(exp): loss_cov_sum.detach().cpu(),
-                    #"std_loss/epoch:{}".format(exp): loss_std_sum.detach().cpu(),
-                    #"epoch":exp})
                 mtt_loss_avg /= (num_classes)
                 metrics = {k:v/num_classes for k, v in metrics.items()}
 
@@ -459,6 +447,5 @@ def main():
         accs = accs_all_exps[key]
         print('Run %d experiments, train on %s, evaluate %d random %s, mean  = %.2f%%  std = %.2f%%'%(args.num_exp, args.model, len(accs), key, np.mean(accs)*100, np.std(accs)*100))
 
-    #wandb.finish()
 if __name__ == '__main__':
     main()

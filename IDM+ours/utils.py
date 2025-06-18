@@ -686,7 +686,7 @@ AUGMENT_FNS = {
 
 
 import  random
-def get_premodel(model_path=r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models"):
+def get_premodel(model_path=r"\nn_models"):
     model_list=os.listdir(model_path)
     n=len(model_list)
     idx=random.randint(0, n-1)
