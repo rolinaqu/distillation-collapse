@@ -75,9 +75,9 @@ def main():
     # args.outer_loop, args.inner_loop = get_loops(args.ipc)
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if torch.cuda.is_available(): 
-    	print("GPU speedup enabled, cuda is available") 
+        print("GPU speedup enabled, cuda is available") 
     else: 
-    	print("GPU NOT AVAILABLE, USING CPU!")
+        print("GPU NOT AVAILABLE, USING CPU!")
 
     args.dsa_param = ParamDiffAug()
     args.dsa = False if args.dsa_strategy in ['none', 'None'] else True
