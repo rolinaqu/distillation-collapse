@@ -52,8 +52,8 @@ def main():
             loss_test, acc_test = epoch('test', testloader, net, optimizer, criterion, args, aug = False)
             scheduler.step()
             if(ep % 5 == 0):
-                print("Epoch number " + str(acc_test) + " lr: " + str(optimizer.param_groups[0]["lr"]))
-                print("Train loss: " + str(loss_train) + " Train accuracy: " + str(acc_train))
+                print("Epoch number " + str(ep) + " lr: " + str(optimizer.param_groups[0]["lr"]))
+                print("Train loss: " + str(loss_train) + " Train accuracy: " + str(acc_train) + " test acc: " + str(acc_test))
             if ep == pre_epochs -1:
                 print("Final epoch for Model " + str(i) + ", Test Accuracy: "+str(acc_test))
         #save path
