@@ -45,7 +45,7 @@ def main():
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.1)
 
         criterion = nn.CrossEntropyLoss().to(args.device)
-        trainloader = torch.utils.data.DataLoader(dst_train, batch_size=args.batch_train, shuffle=True, num_workers=6)
+        trainloader = torch.utils.data.DataLoader(dst_train, batch_size=args.batch_train, shuffle=True, num_workers=1)
         for ep in range(pre_epochs):
             #print("Epoch number " + str(ep))
             loss_train, acc_train = epoch('train', trainloader, net, optimizer, criterion, args, aug = False)
