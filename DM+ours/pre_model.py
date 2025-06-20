@@ -61,7 +61,7 @@ def main():
         save_path = args.save_path
         if not os.path.exists(save_path):
                 os.mkdir(save_path)
-        torch.save(net.state_dict(), save_path+"/default001lr{}.pth".format(i))
+        torch.save(net.state_dict(), save_path+"/005lr{}.pth".format(i))
         
 if __name__ == '__main__':
     main()
