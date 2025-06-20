@@ -42,7 +42,7 @@ def main():
         net = get_network(args.model, channel, num_classes, im_size).to(args.device) # get a random model
 
         optimizer = torch.optim.SGD(net.parameters(), lr=args.lr_net, momentum=0.9, weight_decay=0.0005)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=60, gamma=0.1)
 
         criterion = nn.CrossEntropyLoss().to(args.device)
         trainloader = torch.utils.data.DataLoader(dst_train, batch_size=args.batch_train, shuffle=True, num_workers=1)
@@ -61,7 +61,7 @@ def main():
         save_path = args.save_path
         if not os.path.exists(save_path):
                 os.mkdir(save_path)
-        torch.save(net.state_dict(), save_path+"/005lr{}.pth".format(i))
+        torch.save(net.state_dict(), save_path+"/dropoutimproved{}.pth".format(i))
         
 if __name__ == '__main__':
     main()
