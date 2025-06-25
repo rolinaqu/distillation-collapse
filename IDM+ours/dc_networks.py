@@ -1076,7 +1076,9 @@ class ConvNet_GBN(nn.Module):
                 x = module(x)
             if flatten:
                 out = x.view(x.size(0), -1)
-                return out
+                return out, x #trying to fix the problem in line 368 in IDM_cifar10_IID.py (output_real, output_real_unflat expected from embed)
+                # see ConvNet embed_channel_avg for details
+                # x.view(x.size(0), x.size(1),-1)
             else:
                 return x
         else:

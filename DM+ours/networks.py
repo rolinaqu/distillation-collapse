@@ -441,8 +441,8 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         self.in_planes = 64
         self.norm = norm
-       	
-       	p = 0.4 #probability of dropout
+           
+        p = 0.4 #probability of dropout
         self.conv1 = nn.Conv2d(channel, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.GroupNorm(64, 64, affine=True) if self.norm == 'instancenorm' else nn.BatchNorm2d(64)
         self.dropout0 = nn.Dropout(p)

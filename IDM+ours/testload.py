@@ -203,7 +203,6 @@ class ResNet(nn.Module):
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
             self.fc = nn.Linear(num_classes, num_classes, bias=fc_bias)
 
-
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -288,6 +287,26 @@ class ResNet(nn.Module):
 
     def forward(self, x: Tensor):
         return self._forward_impl(x)
+    
+    def embed(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        if not self.SOTA:
+            x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        features = F.normalize(x)
+        features = features.view(features.size(0), -1)
+        return features
+
+    
 
 
 def _resnet(

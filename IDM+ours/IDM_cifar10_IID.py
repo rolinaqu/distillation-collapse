@@ -24,13 +24,13 @@ def main():
     parser = argparse.ArgumentParser(description='Parameter Processing')
     parser.add_argument('--method', type=str, default='DM', help='DC/DSA/DM')
     parser.add_argument('--dataset', type=str, default='CIFAR10', help='dataset')
-    parser.add_argument('--model', type=str, default='ConvNet_GBN', help='model')
+    parser.add_argument('--model', type=str, default='ConvNet', help='model')
     parser.add_argument('--ipc', type=int, default=50, help='image(s) per class')
     parser.add_argument('--eval_mode', type=str, default='S', help='eval_mode') # S: the same to training model, M: multi architectures,  W: net width, D: net depth, A: activation function, P: pooling layer, N: normalization layer,
     parser.add_argument('--num_exp', type=int, default=5, help='the number of experiments')
     parser.add_argument('--num_eval', type=int, default=20, help='the number of evaluating randomly initialized models')
     parser.add_argument('--epoch_eval_train', type=int, default=1000, help='epochs to train a model with synthetic data') # it can be small for speeding up with little performance drop
-    parser.add_argument('--Iteration', type=int, default=20000, help='training iterations')
+    parser.add_argument('--Iteration', type=int, default=2000, help='training iterations')
     parser.add_argument('--lr_img', type=float, default=1.0, help='learning rate for updating synthetic images')
     parser.add_argument('--lr_net', type=float, default=0.01, help='learning rate for updating network parameters')
     parser.add_argument('--batch_real', type=int, default=256, help='batch size for real data')
@@ -111,13 +111,15 @@ def main():
         labels_all = []
         indices_class = [[] for c in range(num_classes)]
 
+        # organizes dataset into different lists
         images_all = [torch.unsqueeze(dst_train[i][0], dim=0) for i in range(len(dst_train))]
         labels_all = [dst_train[i][1] for i in range(len(dst_train))]
         for i, lab in enumerate(labels_all):
-            indices_class[lab].append(i)
+            indices_class[lab].append(i) #appends image to indices_class for each class
         images_all = torch.cat(images_all, dim=0).to(args.device)
         labels_all = torch.tensor(labels_all, dtype=torch.long, device=args.device)
 
+        #prints number of indices for each class c in range (class c = 0: 5000 real images)
         for c in range(num_classes):
             print('class c = %d: %d real images'%(c, len(indices_class[c])))
 
@@ -234,6 +236,7 @@ def main():
                 
                 
                 save_image(image_syn_vis, save_name, nrow=args.ipc) # Trying normalize = True/False may get better visual effects.
+                #could insert a torch.save here to save the checkpoint as a pth file as well
 
                 # reset accuracy meters
                 acc_report = "Training Acc: "
@@ -248,7 +251,7 @@ def main():
 
             if it % args.net_generate_interval == 0:
                 # append and pop net list:
-                for _ in range(args.net_push_num):
+                for i in range(args.net_push_num): #net_push_num is default 1
                     if len(net_list) == net_num:
                         net_list.pop(0)
                         optimizer_list.pop(0)
@@ -264,19 +267,25 @@ def main():
                     optimizer_list.append(optimizer_net)
                     acc_meters.append(torchnet.meter.ClassErrorMeter(accuracy=True))
 
-            _ = list(range(len(net_list)))
-            if len(_[args.net_begin: args.net_end]) > 10:
-                _ = _[args.net_begin: args.net_end]
-            random.shuffle(_)
+
+            #this has been tweaked from _ to rand_indices for clarity, could cause problems later
+            # if _ is referenced again at some point
+            rand_indices = list(range(len(net_list)))
+            if len(rand_indices[args.net_begin: args.net_end]) > 10:
+                rand_indices = rand_indices[args.net_begin: args.net_end]
+            random.shuffle(rand_indices)
             if args.ij_selection == 'random':
                 # net_index_i, net_index_j = _[:2]
-                net_index_list = _[:args.train_net_num]
+                #reshuffles net_index_list according to rand_indices
+                net_index_list = rand_indices[:args.train_net_num] 
             else:
                 raise NotImplemented()
             train_net_list = [net_list[ind] for ind in net_index_list]
             train_acc_list = [acc_meters[ind] for ind in net_index_list]
 
-            embed_list = [net.module.embed_channel_avg if torch.cuda.device_count() > 1 else net.embed_channel_avg for net in train_net_list]
+            #embed_list = [net.module.embed_channel_avg if torch.cuda.device_count() > 1 else net.embed_channel_avg for net in train_net_list]
+            #net.embed_channel_avg calls embed_channel_avg method for each net in train_net_list
+            embed_list = [net.embed_channel_avg for net in train_net_list]
 
             for _ in range(args.outer_loop):
                 loss_avg = 0
@@ -288,13 +297,15 @@ def main():
                 #expecting one model, getting another. it is Not Happy About This (line 307 is the problem causer but this starts the problem here)
                 net_res = get_network("ResNet18", channel, num_classes, im_size).to(args.device) 
                 #print("TESTING LOAD OF NC RESNET18")
-                #net_res = testload.resnet18().to(args.device)
+                net_res = testload.resnet18().to(args.device)
                 # get a random model
-                net_path=get_premodel()
-                #net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
+                #net_path=get_premodel()
+                net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
 
                 state_dict = torch.load(net_path, map_location = 'cpu')
                 new_state_dict = {}
+
+                #renames all keys to module.key for...some reason? 
                 for key, value in state_dict.items():
                     new_key = key
                     if not key.startswith('module.'):
@@ -304,7 +315,11 @@ def main():
                 net_res.train()
                 for param in list(net_res.parameters()):
                     param.requires_grad = False
-                embed_res = net_res.module.embed if torch.cuda.device_count() > 1 else net_res.embed
+
+                #calling embedding METHOD as a function
+                #embed_res = net_res.module.embed if torch.cuda.device_count() > 1 else net_res.embed
+                embed_res = net_res.embed #testload resnet function now has an embed method so this might work
+
                 ''' update synthetic data '''
                 if 'BN' not in args.model or args.model=='ConvNet_GBN': # for ConvNet
                     for image_sign, image_temp in [['syn', image_syn]]:
@@ -347,8 +362,14 @@ def main():
                                     metrics['real'] += loss_real[indices_topk_loss].mean().item()
 
                                 
-
+                                #convnet_GBN does not have output_real_unflat to unpackage from return values
+                                #convnet DOES use convnet as model params 
+                                #print(str(type(embed)))
+                                #print(str(type(net))) #default is dc_networks.ConvNet_GBN
+                                # last = -1 by default
+                                # embed = embed_channel_avg for net in train_net_list (line 287)
                                 output_real,output_real_unflat = embed(img_real, last=args.embed_last)
+                                #output_real = embed(img_real, last=args.embed_last)
 
                                 output_real=output_real.detach()
                                 output_real_unflat=output_real_unflat.detach()
@@ -368,11 +389,13 @@ def main():
                                 loss_cov+=torch.sum((local_real_cov - local_syn_cov)**2)*0.03
                                 loss_c+=loss_cov
                                 ###
+                                
 
 
                                 #pre resnet18 std loss
                                 loss_std = torch.tensor(0.0).to(args.device)
                                 output_syn_res = embed_res(img_syn)
+                                x, output_syn_res = net_res.forward(img_syn)
                                 syn_mean=torch.mean(output_syn_res, dim=0)
                                 for idx in range(output_syn_res.size(0)):
                                     syn_std=torch.sum((output_syn_res[idx]-syn_mean)**2)*0.01
