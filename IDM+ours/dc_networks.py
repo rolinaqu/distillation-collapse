@@ -163,6 +163,7 @@ class SimplexETF(nn.Module):
         super().__init__()
         self.feat_dim = feat_dim
         self.num_classes = num_classes
+        print("feat_dim = ", feat_dim, "num_classes = ", num_classes)
 
         #construct ETF matrix
         weight = torch.sqrt(torch.tensor(num_classes/(num_classes-1)))*(torch.eye(num_classes)-(1/num_classes)*torch.ones((num_classes, num_classes)))
