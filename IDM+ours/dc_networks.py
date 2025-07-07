@@ -170,6 +170,8 @@ class SimplexETF(nn.Module):
 
         self.register_buffer('etf', weight)
         self.requires_grad_(False)
+    def forward(self, x):
+        return x @ self.etf
     
 
 
