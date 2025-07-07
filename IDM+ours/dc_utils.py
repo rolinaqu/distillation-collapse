@@ -175,8 +175,8 @@ def get_network(model, channel, num_classes, im_size=(32, 32), v2_setting=False,
     else:
         net_width, net_depth, net_act, net_norm, net_pooling = get_default_convnet_setting()
 
-    #if model == 'ConvNet' and ETF_fc: #get etf version
-    #    net = ConvNet(channel=channel, num_classes=num_classes, net_width=net_width, net_depth=net_depth, net_act=net_act, net_norm=net_norm, net_pooling=net_pooling, im_size=im_size)
+    if model == 'ConvNet' and ETF_fc: #get etf version
+        net = ConvNet(channel=channel, num_classes=num_classes, net_width=net_width, net_depth=net_depth, net_act=net_act, net_norm=net_norm, net_pooling=net_pooling, im_size=im_size, ETF_fc=ETF_fc)
 
     if model == 'MLP':
         net = MLP(channel=channel, num_classes=num_classes)
