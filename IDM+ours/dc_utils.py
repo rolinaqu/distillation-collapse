@@ -168,15 +168,18 @@ def get_default_convnet_setting_v2():
     net_width, net_depth, net_act, net_norm, net_pooling = 256, 3, 'relu', 'instancenorm', 'avgpooling'
     return net_width, net_depth, net_act, net_norm, net_pooling
 
-def get_network(model, channel, num_classes, im_size=(32, 32), v2_setting=False, ETF_fc = False):
+def get_network(model, channel, num_classes, im_size=(32, 32), v2_setting=False, ETF_fc: bool = False):
     torch.random.manual_seed(int(time.time() * 1000) % 100000)
     if v2_setting:
         net_width, net_depth, net_act, net_norm, net_pooling = get_default_convnet_setting_v2()
     else:
         net_width, net_depth, net_act, net_norm, net_pooling = get_default_convnet_setting()
+    print("in get_network, model = ", model, " ETF_fc = ", ETF_fc)
 
     if model == 'ConvNet' and ETF_fc: #get etf version
+        #print("loading etf version")
         net = ConvNet(channel=channel, num_classes=num_classes, net_width=net_width, net_depth=net_depth, net_act=net_act, net_norm=net_norm, net_pooling=net_pooling, im_size=im_size, ETF_fc=ETF_fc)
+        return net
 
     if model == 'MLP':
         net = MLP(channel=channel, num_classes=num_classes)

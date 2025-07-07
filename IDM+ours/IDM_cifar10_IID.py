@@ -178,7 +178,7 @@ def main():
         optimizer_list = list()
         acc_meters = list()
         for net_index in range(3):
-            net = get_network(args.model, channel, num_classes, im_size, args.ETF_fc).to(args.device) # get a random model
+            net = get_network(args.model, channel, num_classes, im_size, ETF_fc = args.ETF_fc).to(args.device) # get a random model
             net.train()
             if args.net_decay:
                 optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net, momentum=0.9, weight_decay=0.0005)
@@ -260,6 +260,8 @@ def main():
                         net_list.pop(0)
                         optimizer_list.pop(0)
                         acc_meters.pop(0)
+                    print("loading network with args.ETF_fc = ", args.ETF_fc) 
+                    print("default model: ", args.model)
                     net = get_network(args.model, channel, num_classes, im_size, args.ETF_fc).to(args.device) # get a random model
                     net.train()
                     if args.net_decay:
@@ -304,7 +306,8 @@ def main():
                 net_res = testload.resnet18().to(args.device)
                 # get a random model
                 #net_path=get_premodel()
-                net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
+                #net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
+                net_path = r"/users/PAS2138/rolinaqu/2025 URAP Research/Code/IID/nc_model_weights/SGD_epoch_200.pth"
 
                 state_dict = torch.load(net_path, map_location = 'cpu')
                 new_state_dict = {}

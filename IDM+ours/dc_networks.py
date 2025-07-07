@@ -183,7 +183,7 @@ class ConvNet(nn.Module):
 
         if ETF_fc: #sets etf at initialization
             self.classifier = SimplexETF(num_feat, num_classes)
-            print("Last-layer classifier of ConvNet set to Simplex ETF!")
+            #print("Last-layer classifier of ConvNet set to Simplex ETF!")
         else: 
             self.classifier = nn.Linear(num_feat, num_classes)
         self.upsample = nn.Upsample(scale_factor=2, mode='bilinear')
