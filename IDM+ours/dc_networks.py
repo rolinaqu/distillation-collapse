@@ -158,15 +158,34 @@ class BSReduction_v2(nn.Module):
         else:
             exit('unknown net_norm: %s'%net_norm)
 
+class SimplexETF(nn.Module):
+    def __init__(self, feat_dim, num_classes):
+        super().__init__()
+        self.feat_dim = feat_dim
+        self.num_classes = num_classes
+
+        #construct ETF matrix
+        weight = torch.sqrt(torch.tensor(num_classes/(num_classes-1)))*(torch.eye(num_classes)-(1/num_classes)*torch.ones((num_classes, num_classes)))
+        weight /= torch.sqrt((1/num_classes*torch.norm(weight, 'fro')**2))
+
+        self.register_buffer('etf', weight)
+        self.requires_grad_(False)
+    
+
 
 ''' ConvNet '''
 class ConvNet(nn.Module):
-    def __init__(self, channel, num_classes, net_width, net_depth, net_act, net_norm, net_pooling, im_size = (32,32)):
+    def __init__(self, channel, num_classes, net_width, net_depth, net_act, net_norm, net_pooling, im_size = (32,32), ETF_fc = False):
         super(ConvNet, self).__init__()
 
         self.features, shape_feat = self._make_layers(channel, net_width, net_depth, net_norm, net_act, net_pooling, im_size)
         num_feat = shape_feat[0]*shape_feat[1]*shape_feat[2]
-        self.classifier = nn.Linear(num_feat, num_classes)
+
+        if ETF_fc: #sets etf at initialization
+            self.classifier = SimplexETF(num_feat, num_classes)
+            print("Last-layer classifier of ConvNet set to Simplex ETF!")
+        else: 
+            self.classifier = nn.Linear(num_feat, num_classes)
         self.upsample = nn.Upsample(scale_factor=2, mode='bilinear')
 
     def forward(self, x, upsample=False, embed=False):

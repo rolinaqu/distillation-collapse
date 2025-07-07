@@ -67,6 +67,7 @@ def main():
     parser.add_argument('--train_net_num', type=int, default=2, help='outer loop for network update')
     parser.add_argument('--aug_num', type=int, default=1, help='outer loop for network update')
     parser.add_argument('--net_push_num', type=int, default=1, help='outer loop for network update')
+    parser.add_argument('--ETF_fc', dest='ETF_fc', action='store_true')
 
     parser_bool(parser, 'zca', False)
     parser_bool(parser, 'aug', False)
@@ -93,6 +94,8 @@ def main():
     print('eval_it_pool: ', eval_it_pool)
     # channel, im_size, num_classes, class_names, mean, std, dst_train, dst_test, testloader = get_dataset(args.dataset, args.data_path)
     channel, im_size, num_classes, class_names, mean, std, dst_train, dst_test, testloader, loader_train_dict, class_map, class_map_inv = get_dataset_mtt(args.dataset, args.data_path, args.batch_real, 'none', args=args)
+    
+    
     model_eval_pool = get_eval_pool(args.eval_mode, 'ConvNet', args.model)
 
     accs_all_exps = dict() # record performances of all experiments
@@ -175,7 +178,7 @@ def main():
         optimizer_list = list()
         acc_meters = list()
         for net_index in range(3):
-            net = get_network(args.model, channel, num_classes, im_size).to(args.device) # get a random model
+            net = get_network(args.model, channel, num_classes, im_size, args.ETF_fc).to(args.device) # get a random model
             net.train()
             if args.net_decay:
                 optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net, momentum=0.9, weight_decay=0.0005)
@@ -200,7 +203,8 @@ def main():
 
                     accs = []
                     for it_eval in range(args.num_eval):
-                        net_eval = get_network(model_eval, channel, num_classes, im_size).to(args.device) # get a random model
+                        net_eval = get_network(model_eval, channel, num_classes, im_size, args.ETF_fc).to(args.device) # get a random model
+                        #default in model_eval is ConvNet
                         image_syn_eval, label_syn_eval = copy.deepcopy(image_syn.detach()), copy.deepcopy(label_syn.detach()) # avoid any unaware modification
                         if args.aug:
                             image_syn_eval, label_syn_eval = number_sign_augment(image_syn_eval, label_syn_eval)
@@ -256,7 +260,7 @@ def main():
                         net_list.pop(0)
                         optimizer_list.pop(0)
                         acc_meters.pop(0)
-                    net = get_network(args.model, channel, num_classes, im_size).to(args.device) # get a random model
+                    net = get_network(args.model, channel, num_classes, im_size, args.ETF_fc).to(args.device) # get a random model
                     net.train()
                     if args.net_decay:
                         optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net, momentum=0.9, weight_decay=0.0005)
@@ -295,7 +299,7 @@ def main():
 
                 
                 #expecting one model, getting another. it is Not Happy About This (line 307 is the problem causer but this starts the problem here)
-                net_res = get_network("ResNet18", channel, num_classes, im_size).to(args.device) 
+                #net_res = get_network("ResNet18", channel, num_classes, im_size, args.ETF_fc).to(args.device) 
                 #print("TESTING LOAD OF NC RESNET18")
                 net_res = testload.resnet18().to(args.device)
                 # get a random model
