@@ -169,8 +169,19 @@ class SimplexETF(nn.Module):
         weight = torch.sqrt(torch.tensor(num_classes/(num_classes-1)))*(torch.eye(num_classes)-(1/num_classes)*torch.ones((num_classes, num_classes)))
         weight /= torch.sqrt((1/num_classes*torch.norm(weight, 'fro')**2))
 
+        #can reduce feature dimensions by choosing d=k (fixdim option in neural collapse)
+        #if fixdim:
+        #    m.weight = nn.Parameter(weight)
+        #else:
+        #    m.weight = nn.Parameter(torch.mm(weight, torch.eye(num_classes, 512 * block.expansion)))
+        #    m.weight.requires_grad_(False)
+
+        weight = nn.Parameter(torch.mm(weight, torch.eye(num_classes, 512 * feat_dim)))
+
         self.register_buffer('etf', weight)
         self.requires_grad_(False)
+
+
     def forward(self, x):
         return x @ self.etf
     
