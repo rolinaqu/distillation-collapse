@@ -178,6 +178,7 @@ def main():
         optimizer_list = list()
         acc_meters = list()
         for net_index in range(3):
+            #default parameters: model = "ConvNet" channel = 
             net = get_network(args.model, channel, num_classes, im_size, ETF_fc = args.ETF_fc).to(args.device) # get a random model
             net.train()
             if args.net_decay:
