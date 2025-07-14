@@ -176,14 +176,15 @@ class SimplexETF(nn.Module):
         #    m.weight = nn.Parameter(torch.mm(weight, torch.eye(num_classes, 512 * block.expansion)))
         #    m.weight.requires_grad_(False)
 
-        weight = nn.Parameter(torch.mm(weight, torch.eye(num_classes, 512 * feat_dim)))
+        weight = nn.Parameter(torch.mm(weight, torch.eye(num_classes,  feat_dim)))
 
         self.register_buffer('etf', weight)
         self.requires_grad_(False)
 
 
     def forward(self, x):
-        return x @ self.etf
+        #print("running self * etf")
+        return x @ self.etf.T
     
 
 

@@ -204,7 +204,7 @@ def main():
 
                     accs = []
                     for it_eval in range(args.num_eval):
-                        net_eval = get_network(model_eval, channel, num_classes, im_size, args.ETF_fc).to(args.device) # get a random model
+                        net_eval = get_network(model_eval, channel, num_classes, im_size, ETF_fc = args.ETF_fc).to(args.device) # get a random model
                         #default in model_eval is ConvNet
                         image_syn_eval, label_syn_eval = copy.deepcopy(image_syn.detach()), copy.deepcopy(label_syn.detach()) # avoid any unaware modification
                         if args.aug:
@@ -261,9 +261,9 @@ def main():
                         net_list.pop(0)
                         optimizer_list.pop(0)
                         acc_meters.pop(0)
-                    print("loading network with args.ETF_fc = ", args.ETF_fc) 
-                    print("default model: ", args.model)
-                    net = get_network(args.model, channel, num_classes, im_size, args.ETF_fc).to(args.device) # get a random model
+                    #print("loading network with args.ETF_fc = ", args.ETF_fc) 
+                    #print("default model: ", args.model)
+                    net = get_network(args.model, channel, num_classes, im_size, ETF_fc = args.ETF_fc).to(args.device) # get a random model
                     net.train()
                     if args.net_decay:
                         optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net, momentum=0.9, weight_decay=0.0005)

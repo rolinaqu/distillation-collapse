@@ -174,7 +174,7 @@ def get_network(model, channel, num_classes, im_size=(32, 32), v2_setting=False,
         net_width, net_depth, net_act, net_norm, net_pooling = get_default_convnet_setting_v2()
     else:
         net_width, net_depth, net_act, net_norm, net_pooling = get_default_convnet_setting()
-    print("in get_network, model = ", model, " ETF_fc = ", ETF_fc)
+    #print("in get_network, model = ", model, " ETF_fc = ", ETF_fc)
 
     if model == 'ConvNet' and ETF_fc: #get etf version
         #print("loading etf version")
