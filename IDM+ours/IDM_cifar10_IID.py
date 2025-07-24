@@ -273,6 +273,8 @@ def main():
         model_res.fc.register_forward_pre_hook(fc_features)
 
         net_path = r"/users/PAS2138/rolinaqu/2025 URAP Research/Code/IID/nc_model_weights/SGD_epoch_200.pth"
+        #net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
+        
         state_dict = torch.load(net_path, map_location = 'gpu')
 
         model_res.load_state_dict(state_dict)
@@ -288,10 +290,15 @@ def main():
         mu_G_test, mu_c_dict_test, test_acc1, test_acc5 = compute_info(args, model_res, fc_features, testloader, isTrain=False)
         Sigma_W = compute_Sigma_W(args, model_res, fc_features, mu_c_dict_test, testloader, isTrain = False)
         Sigma_B = compute_Sigma_B(mu_c_dict_test, mu_G_test)
+        print(f"Sigma_W = {Sigma_W}")
+        print(f"Sigma_B = {Sigma_B}")
 
         collapse_metric = np.trace(Sigma_W @ scilin.pinv(Sigma_B)) / len(mu_c_dict_test)
 
         print(f"calculated NC1 collapse metric using {args.dataset} and Resnet18: {collapse_metric}")
+
+        #initial run using SGD outputted ... 8994.33515625
+        return
 
         #calculate barrier constraints using this collapse metric
 
