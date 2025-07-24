@@ -16,7 +16,151 @@ from utils import get_dataset as get_dataset_mtt
 from utils import get_premodel
 import torchvision
 import testload
+import scipy.linalg as scilin
+
+
 best_acc = 0
+
+MNIST_TRAIN_SAMPLES = (5923, 6742, 5958, 6131, 5842, 5421, 5918, 6265, 5851, 5949)
+MNIST_TEST_SAMPLES = (980, 1135, 1032, 1010, 982, 892, 958, 1028, 974, 1009)
+CIFAR10_TRAIN_SAMPLES = 10 * (5000,)
+CIFAR10_TEST_SAMPLES = 10 * (1000,)
+
+class FCFeatures:
+    def __init__(self):
+        self.outputs = []
+
+    def __call__(self, module, module_in):
+        self.outputs.append(module_in)
+
+    def clear(self):
+        self.outputs = []
+
+def compute_Sigma_W(args, model, fc_features, mu_c_dict, dataloader, isTrain=True):
+
+    Sigma_W = 0
+    for batch_idx, (inputs, targets) in enumerate(dataloader):
+
+        inputs, targets = inputs.to(args.device), targets.to(args.device)
+
+        with torch.no_grad():
+            outputs = model(inputs)
+
+        features = fc_features.outputs[0][0]
+        fc_features.clear()
+
+        for b in range(len(targets)):
+            y = targets[b].item()
+            Sigma_W += (features[b, :] - mu_c_dict[y]).unsqueeze(1) @ (features[b, :] - mu_c_dict[y]).unsqueeze(0)
+
+    if args.dataset == 'mnist':
+        if isTrain:
+            Sigma_W /= sum(MNIST_TRAIN_SAMPLES)
+        else:
+            Sigma_W /= sum(MNIST_TEST_SAMPLES)
+    elif args.dataset == 'cifar10' or args.dataset == 'cifar10_random':
+        if isTrain:
+            Sigma_W /= sum(CIFAR10_TRAIN_SAMPLES)
+        else:
+            Sigma_W /= sum(CIFAR10_TEST_SAMPLES)
+
+    return Sigma_W.cpu().numpy()
+
+def compute_accuracy(output, target, topk=(1,)):
+    """Computes the precision@k for the specified values of k"""
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    res = []
+    for k in topk:
+        correct_k = correct[:k].reshape(-1).float().sum(0)
+        res.append(correct_k.mul_(100.0 / batch_size))
+    return res
+
+class AverageMeter(object):
+    """Computes and stores the average and current value
+       Imported from https://github.com/pytorch/examples/blob/master/imagenet/main.py#L247-L262
+    """
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+def compute_info(args, model, fc_features, dataloader, isTrain=True):
+    mu_G = 0
+    mu_c_dict = dict()
+    top1 = AverageMeter()
+    top5 = AverageMeter()
+    for batch_idx, (inputs, targets) in enumerate(dataloader):
+
+        inputs, targets = inputs.to(args.device), targets.to(args.device)
+
+        with torch.no_grad():
+            outputs = model(inputs)
+
+        features = fc_features.outputs[0][0]
+        fc_features.clear()
+
+        mu_G += torch.sum(features, dim=0)
+
+        for b in range(len(targets)):
+            y = targets[b].item()
+            if y not in mu_c_dict:
+                mu_c_dict[y] = features[b, :]
+            else:
+                mu_c_dict[y] += features[b, :]
+
+        prec1, prec5 = compute_accuracy(outputs[0].data, targets.data, topk=(1, 5))
+        top1.update(prec1.item(), inputs.size(0))
+        top5.update(prec5.item(), inputs.size(0))
+
+    if args.dataset == 'mnist':
+        if isTrain:
+            mu_G /= sum(MNIST_TRAIN_SAMPLES)
+            for i in range(len(MNIST_TRAIN_SAMPLES)):
+                mu_c_dict[i] /= MNIST_TRAIN_SAMPLES[i]
+        else:
+            mu_G /= sum(MNIST_TEST_SAMPLES)
+            for i in range(len(MNIST_TEST_SAMPLES)):
+                mu_c_dict[i] /= MNIST_TEST_SAMPLES[i]
+    elif args.dataset == 'cifar10' or args.dataset == 'cifar10_random':
+        if isTrain:
+            mu_G /= sum(CIFAR10_TRAIN_SAMPLES)
+            for i in range(len(CIFAR10_TRAIN_SAMPLES)):
+                mu_c_dict[i] /= CIFAR10_TRAIN_SAMPLES[i]
+        else:
+            mu_G /= sum(CIFAR10_TEST_SAMPLES)
+            for i in range(len(CIFAR10_TEST_SAMPLES)):
+                mu_c_dict[i] /= CIFAR10_TEST_SAMPLES[i]
+
+    return mu_G, mu_c_dict, top1.avg, top5.avg
+
+
+def compute_Sigma_B(mu_c_dict, mu_G):
+    Sigma_B = 0
+    K = len(mu_c_dict)
+    for i in range(K):
+        Sigma_B += (mu_c_dict[i] - mu_G).unsqueeze(1) @ (mu_c_dict[i] - mu_G).unsqueeze(0)
+
+    Sigma_B /= K
+
+    return Sigma_B.cpu().numpy()
+
+
 
 def main():
     global best_acc
@@ -104,6 +248,7 @@ def main():
 
     data_save = []
 
+    #for each experiment
     for exp in range(args.num_exp):
         print('\n================== Exp %d ==================\n '%exp)
         print('Hyper-parameters: \n', args.__dict__)
@@ -121,6 +266,38 @@ def main():
             indices_class[lab].append(i) #appends image to indices_class for each class
         images_all = torch.cat(images_all, dim=0).to(args.device)
         labels_all = torch.tensor(labels_all, dtype=torch.long, device=args.device)
+
+        #calculate NC1 between classes - calculate sigma_w and sigma_b
+        model_res = testload.resnet18().to(args.device)
+        fc_features = FCFeatures()
+        model_res.fc.register_forward_pre_hook(fc_features)
+
+        net_path = r"/users/PAS2138/rolinaqu/2025 URAP Research/Code/IID/nc_model_weights/SGD_epoch_200.pth"
+        state_dict = torch.load(net_path, map_location = 'gpu')
+
+        model_res.load_state_dict(state_dict)
+        model_res.eval()
+
+        #extracts weights and biases from model_res
+        for n, p in model_res.named_parameters():
+            if 'fc.weight' in n:
+                W = p
+            if 'fc.bias' in n:
+                b = p
+
+        mu_G_test, mu_c_dict_test, test_acc1, test_acc5 = compute_info(args, model_res, fc_features, testloader, isTrain=False)
+        Sigma_W = compute_Sigma_W(args, model_res, fc_features, mu_c_dict_test, testloader, isTrain = False)
+        Sigma_B = compute_Sigma_B(mu_c_dict_test, mu_G_test)
+
+        collapse_metric = np.trace(Sigma_W @ scilin.pinv(Sigma_B)) / len(mu_c_dict_test)
+
+        print(f"calculated NC1 collapse metric using {args.dataset} and Resnet18: {collapse_metric}")
+
+        #calculate barrier constraints using this collapse metric
+
+
+
+
 
         #prints number of indices for each class c in range (class c = 0: 5000 real images)
         for c in range(num_classes):
@@ -178,13 +355,13 @@ def main():
         optimizer_list = list()
         acc_meters = list()
         for net_index in range(3):
-            #default parameters: model = "ConvNet" channel = 
+            #default parameters: model = "ConvNet" channel = 2048 classes = 10 (CIFAR10)
             net = get_network(args.model, channel, num_classes, im_size, ETF_fc = args.ETF_fc).to(args.device) # get a random model
             net.train()
             if args.net_decay:
                 optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net, momentum=0.9, weight_decay=0.0005)
             else:
-                optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net)  # optimizer_img for synthetic data
+                optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net)  # optimizer_net for randomly initialized ConvNet
             optimizer_net.zero_grad()
             net_list.append(net)
             optimizer_list.append(optimizer_net)
@@ -192,6 +369,7 @@ def main():
         
         criterion = nn.CrossEntropyLoss().to(args.device)
 
+        #actual model training loop
         for it in range(args.Iteration+1):
 
             ''' Evaluate synthetic data '''
@@ -294,6 +472,7 @@ def main():
             #net.embed_channel_avg calls embed_channel_avg method for each net in train_net_list
             embed_list = [net.embed_channel_avg for net in train_net_list]
 
+            #1 by default?
             for _ in range(args.outer_loop):
                 loss_avg = 0
                 mtt_loss_avg = 0
@@ -310,10 +489,10 @@ def main():
                 #net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
                 net_path = r"/users/PAS2138/rolinaqu/2025 URAP Research/Code/IID/nc_model_weights/SGD_epoch_200.pth"
 
-                state_dict = torch.load(net_path, map_location = 'cpu')
+                state_dict = torch.load(net_path, map_location = 'gpu')
                 new_state_dict = {}
 
-                #renames all keys to module.key for...some reason? 
+                #verifies compatibility depending on state_dict (prepends 'module.') 
                 for key, value in state_dict.items():
                     new_key = key
                     if not key.startswith('module.'):
@@ -334,12 +513,15 @@ def main():
                         loss = torch.tensor(0.0).to(args.device)
                         loss_cov_sum = torch.tensor(0.0).to(args.device)
                         loss_std_sum = torch.tensor(0.0).to(args.device)
+
+                        loss_within_class_sum = torch.tensor(0.0).to(args.device)
+
                         for net_ind in range(len(train_net_list)):
                             net = train_net_list[net_ind]
                             net.eval()
                             embed = embed_list[net_ind]
                             net_acc = train_acc_list[net_ind]
-                            for c in range(num_classes):
+                            for c in range(num_classes): #processed per class
                                 loss_c = torch.tensor(0.0).to(args.device)
                                 
                                 loss_cov = torch.tensor(0.0).to(args.device)
@@ -429,6 +611,16 @@ def main():
                                         syn_ce_loss += (F.cross_entropy(logits_syn, lab_syn.repeat(args.aug_num)) * weight_i)
 
                                     loss_c += (syn_ce_loss * args.ce_weight)
+
+
+
+                                #calculate nc1 metrics using resnet18?
+                                
+
+
+
+
+                                loss_c += loss_within_class_sum #add nc1 to loss 
 
                                 optimizer_img.zero_grad()
                                 loss_c.backward()

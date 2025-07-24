@@ -173,7 +173,7 @@ def get_dataset(dataset, data_path, batch_size=1, subset="imagenette", args=None
 
         args.zca_trans = zca
 
-
+    #hard coded data loaders?
     testloader = torch.utils.data.DataLoader(dst_test, batch_size=128, shuffle=False, num_workers=2)
 
 
