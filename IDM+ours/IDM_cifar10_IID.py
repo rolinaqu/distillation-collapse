@@ -26,6 +26,7 @@ MNIST_TEST_SAMPLES = (980, 1135, 1032, 1010, 982, 892, 958, 1028, 974, 1009)
 CIFAR10_TRAIN_SAMPLES = 10 * (5000,)
 CIFAR10_TEST_SAMPLES = 10 * (1000,)
 
+#hook to insert into features layer
 class FCFeatures:
     def __init__(self):
         self.outputs = []
@@ -35,6 +36,25 @@ class FCFeatures:
 
     def clear(self):
         self.outputs = []
+
+def compute_Sigma_W_no_loader(args, model, fc_features, mu_c_dict, inputs, targets):
+    Sigma_W = 0
+    inputs, targets = inputs.to(args.device), targets.to(args.device)
+    with torch.no_grad():
+        outputs = model(inputs)
+    features = fc_features.outputs[0][0]
+    fc_features.clear()
+
+    for b in range(len(targets)):
+        y = targets[b].item()
+        Sigma_W += (features[b, :] - mu_c_dict[y]).unsqueeze(1) @ (features[b, :] - mu_c_dict[y]).unsqueeze(0)
+
+    Sigma_W /= (inputs.shape[0]/10) #uhhh. normalization happens here but sigma_w is weirdly small without the *10 multiplier
+
+    return Sigma_W.cpu().numpy()
+
+
+
 
 def compute_Sigma_W(args, model, fc_features, mu_c_dict, dataloader, isTrain=True):
 
@@ -53,12 +73,7 @@ def compute_Sigma_W(args, model, fc_features, mu_c_dict, dataloader, isTrain=Tru
             y = targets[b].item()
             Sigma_W += (features[b, :] - mu_c_dict[y]).unsqueeze(1) @ (features[b, :] - mu_c_dict[y]).unsqueeze(0)
 
-    if args.dataset == 'mnist':
-        if isTrain:
-            Sigma_W /= sum(MNIST_TRAIN_SAMPLES)
-        else:
-            Sigma_W /= sum(MNIST_TEST_SAMPLES)
-    elif args.dataset == 'cifar10' or args.dataset == 'cifar10_random':
+    if str.lower(args.dataset) == 'cifar10' or str.lower(args.dataset) == 'cifar10_random':
         if isTrain:
             Sigma_W /= sum(CIFAR10_TRAIN_SAMPLES)
         else:
@@ -66,45 +81,35 @@ def compute_Sigma_W(args, model, fc_features, mu_c_dict, dataloader, isTrain=Tru
 
     return Sigma_W.cpu().numpy()
 
-def compute_accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
-    maxk = max(topk)
-    batch_size = target.size(0)
+def compute_info_no_loader(args, model, fc_features, image_syn, label_syn):
+    mu_G = 0
+    mu_c_dict = dict()
 
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
+    inputs, targets = image_syn.to(args.device), label_syn.to(args.device)
 
-    res = []
-    for k in topk:
-        correct_k = correct[:k].reshape(-1).float().sum(0)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
+    with torch.no_grad():
+        outputs = model(inputs)
 
-class AverageMeter(object):
-    """Computes and stores the average and current value
-       Imported from https://github.com/pytorch/examples/blob/master/imagenet/main.py#L247-L262
-    """
-    def __init__(self):
-        self.reset()
+    features = fc_features.outputs[0][0]
+    fc_features.clear()
+    mu_G += torch.sum(features, dim=0)
+    for b in range(len(targets)):
+        y = targets[b].item()
+        if y not in mu_c_dict:
+            mu_c_dict[y] = features[b, :]
+        else:
+            mu_c_dict[y] += features[b, :]
 
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
+    mu_G /= image_syn.shape[0]
+    for i in range(10): # for each class in CIFAR10, normalize
+        mu_c_dict[i] /= args.ipc
 
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
+    return mu_G, mu_c_dict
+
 
 def compute_info(args, model, fc_features, dataloader, isTrain=True):
     mu_G = 0
     mu_c_dict = dict()
-    top1 = AverageMeter()
-    top5 = AverageMeter()
     for batch_idx, (inputs, targets) in enumerate(dataloader):
 
         inputs, targets = inputs.to(args.device), targets.to(args.device)
@@ -124,20 +129,7 @@ def compute_info(args, model, fc_features, dataloader, isTrain=True):
             else:
                 mu_c_dict[y] += features[b, :]
 
-        prec1, prec5 = compute_accuracy(outputs[0].data, targets.data, topk=(1, 5))
-        top1.update(prec1.item(), inputs.size(0))
-        top5.update(prec5.item(), inputs.size(0))
-
-    if args.dataset == 'mnist':
-        if isTrain:
-            mu_G /= sum(MNIST_TRAIN_SAMPLES)
-            for i in range(len(MNIST_TRAIN_SAMPLES)):
-                mu_c_dict[i] /= MNIST_TRAIN_SAMPLES[i]
-        else:
-            mu_G /= sum(MNIST_TEST_SAMPLES)
-            for i in range(len(MNIST_TEST_SAMPLES)):
-                mu_c_dict[i] /= MNIST_TEST_SAMPLES[i]
-    elif args.dataset == 'cifar10' or args.dataset == 'cifar10_random':
+    if str.lower(args.dataset) == 'cifar10' or str.lower(args.dataset) == 'cifar10_random':
         if isTrain:
             mu_G /= sum(CIFAR10_TRAIN_SAMPLES)
             for i in range(len(CIFAR10_TRAIN_SAMPLES)):
@@ -147,8 +139,7 @@ def compute_info(args, model, fc_features, dataloader, isTrain=True):
             for i in range(len(CIFAR10_TEST_SAMPLES)):
                 mu_c_dict[i] /= CIFAR10_TEST_SAMPLES[i]
 
-    return mu_G, mu_c_dict, top1.avg, top5.avg
-
+    return mu_G, mu_c_dict
 
 def compute_Sigma_B(mu_c_dict, mu_G):
     Sigma_B = 0
@@ -160,6 +151,13 @@ def compute_Sigma_B(mu_c_dict, mu_G):
 
     return Sigma_B.cpu().numpy()
 
+def compute_nc1(args, model, fc_features, image_syn, label_syn):
+    mu_G_syn, mu_c_dict_syn = compute_info_no_loader(args, model, fc_features, image_syn, label_syn)
+    Sigma_W = compute_Sigma_W_no_loader(args, model, fc_features, mu_c_dict_syn, image_syn, label_syn)
+    Sigma_B = compute_Sigma_B(mu_c_dict_syn, mu_G_syn)
+
+    collapse_metric = np.trace(Sigma_W @ scilin.pinv(Sigma_B)) / len(mu_c_dict_syn)
+    return collapse_metric
 
 
 def main():
@@ -212,6 +210,8 @@ def main():
     parser.add_argument('--aug_num', type=int, default=1, help='outer loop for network update')
     parser.add_argument('--net_push_num', type=int, default=1, help='outer loop for network update')
     parser.add_argument('--ETF_fc', dest='ETF_fc', action='store_true')
+    parser.add_argument('--nc_weight', type=float, default=0.1, help="threshold for nc constraint")
+    parser.add_argument('--nc_lambda', type=float, default=0.01, help="lambda threshold to weight loss")
 
     parser_bool(parser, 'zca', False)
     parser_bool(parser, 'aug', False)
@@ -267,45 +267,6 @@ def main():
         images_all = torch.cat(images_all, dim=0).to(args.device)
         labels_all = torch.tensor(labels_all, dtype=torch.long, device=args.device)
 
-        #calculate NC1 between classes - calculate sigma_w and sigma_b
-        model_res = testload.resnet18().to(args.device)
-        fc_features = FCFeatures()
-        model_res.fc.register_forward_pre_hook(fc_features)
-
-        net_path = r"/users/PAS2138/rolinaqu/2025 URAP Research/Code/IID/nc_model_weights/SGD_epoch_200.pth"
-        #net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
-        
-        state_dict = torch.load(net_path, map_location = 'gpu')
-
-        model_res.load_state_dict(state_dict)
-        model_res.eval()
-
-        #extracts weights and biases from model_res
-        for n, p in model_res.named_parameters():
-            if 'fc.weight' in n:
-                W = p
-            if 'fc.bias' in n:
-                b = p
-
-        mu_G_test, mu_c_dict_test, test_acc1, test_acc5 = compute_info(args, model_res, fc_features, testloader, isTrain=False)
-        Sigma_W = compute_Sigma_W(args, model_res, fc_features, mu_c_dict_test, testloader, isTrain = False)
-        Sigma_B = compute_Sigma_B(mu_c_dict_test, mu_G_test)
-        print(f"Sigma_W = {Sigma_W}")
-        print(f"Sigma_B = {Sigma_B}")
-
-        collapse_metric = np.trace(Sigma_W @ scilin.pinv(Sigma_B)) / len(mu_c_dict_test)
-
-        print(f"calculated NC1 collapse metric using {args.dataset} and Resnet18: {collapse_metric}")
-
-        #initial run using SGD outputted ... 8994.33515625
-        return
-
-        #calculate barrier constraints using this collapse metric
-
-
-
-
-
         #prints number of indices for each class c in range (class c = 0: 5000 real images)
         for c in range(num_classes):
             print('class c = %d: %d real images'%(c, len(indices_class[c])))
@@ -329,7 +290,7 @@ def main():
 
         print("Shape of Image_SYN: {}".format(image_syn.shape))
 
-        if args.init == 'real':
+        if args.init == 'real': #default initialization method
             print('initialize synthetic data from random real images')
             for c in range(num_classes):
                 if not args.aug:
@@ -345,6 +306,52 @@ def main():
             raise NotImplementedError()
         else:
             print('initialize synthetic data from random noise')
+
+
+        #calculate NC1 between classes - calculate sigma_w and sigma_b
+        model_res = testload.resnet18().to(args.device)
+        fc_features = FCFeatures()
+        model_res.fc.register_forward_pre_hook(fc_features)
+
+        #net_path = r"/users/PAS2138/rolinaqu/2025 URAP Research/Code/IID/nc_model_weights/SGD_epoch_200.pth"
+        net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
+        
+        state_dict = torch.load(net_path, map_location = 'cpu')
+
+        model_res.load_state_dict(state_dict)
+        model_res.eval()
+
+        #extracts weights and biases from model_res
+
+        mu_G_test, mu_c_dict_test = compute_info(args, model_res, fc_features, testloader, isTrain=False)
+        Sigma_W = compute_Sigma_W(args, model_res, fc_features, mu_c_dict_test, testloader, isTrain = False)
+        Sigma_B = compute_Sigma_B(mu_c_dict_test, mu_G_test)
+
+        #print(f"mu_c_dict_test: {mu_c_dict_test[0]}")
+        #print(f"mu_G_test: {mu_G_test}")
+        
+        #print(f"Sigma_W = {Sigma_W}")
+        #print(f"Sigma_B = {Sigma_B}")
+        
+        #calculate barrier constraints using this collapse metric and compare this value to expected constraints
+        collapse_metric = np.trace(Sigma_W @ scilin.pinv(Sigma_B)) / len(mu_c_dict_test)
+
+        print(f"NC1 total collapse metric using {args.dataset} and Resnet18: {collapse_metric}")
+
+        #mu_G_syn, mu_c_dict_syn = compute_info_no_loader(args, model_res, fc_features, image_syn, label_syn)
+        #Sigma_W = compute_Sigma_W_no_loader(args, model_res, fc_features, mu_c_dict_syn, image_syn, label_syn)
+        #Sigma_B = compute_Sigma_B(mu_c_dict_syn, mu_G_syn)
+
+        #print(f"mu_c_dict_syn: {mu_c_dict_syn[0]}")
+        #print(f"mu_G_syn: {mu_G_syn}")
+        
+        #print(f"Sigma_W = {Sigma_W}")
+        #print(f"Sigma_B = {Sigma_B}")
+
+        collapse_2 = compute_nc1(args, model_res, fc_features, image_syn, label_syn)
+
+        print(f"NC1 collapse metric using synset: {collapse_2}")
+
 
         ''' training '''
         if args.optim == 'sgd':
@@ -498,7 +505,6 @@ def main():
 
                 state_dict = torch.load(net_path, map_location = 'gpu')
                 new_state_dict = {}
-
                 #verifies compatibility depending on state_dict (prepends 'module.') 
                 for key, value in state_dict.items():
                     new_key = key
@@ -512,7 +518,9 @@ def main():
 
                 #calling embedding METHOD as a function
                 #embed_res = net_res.module.embed if torch.cuda.device_count() > 1 else net_res.embed
-                embed_res = net_res.embed #testload resnet function now has an embed method so this might work
+                embed_res = net_res.embed #testload resnet function now has an embed method so this works
+                fc_features = FCFeatures()
+                net_res.fc.register_forward_pre_hook(fc_features)
 
                 ''' update synthetic data '''
                 if 'BN' not in args.model or args.model=='ConvNet_GBN': # for ConvNet
@@ -520,8 +528,6 @@ def main():
                         loss = torch.tensor(0.0).to(args.device)
                         loss_cov_sum = torch.tensor(0.0).to(args.device)
                         loss_std_sum = torch.tensor(0.0).to(args.device)
-
-                        loss_within_class_sum = torch.tensor(0.0).to(args.device)
 
                         for net_ind in range(len(train_net_list)):
                             net = train_net_list[net_ind]
@@ -621,17 +627,18 @@ def main():
 
 
 
-                                #calculate nc1 metrics using resnet18?
-                                
+                                #calculate nc1 metrics using resnet18
+                                #new collapse function 
+                                #of note: this does calculate every CLASS, may be worth trying every complete run-through instead?
+                                collapse_2 = abs(compute_nc1(args, net_res, fc_features, image_syn, label_syn))
+                                nc_loss = abs(collapse_metric - collapse_2) - args.nc_weight
+                                print(f"nc_loss: {nc_loss}")
 
-
-
-
-                                loss_c += loss_within_class_sum #add nc1 to loss 
+                                #using relu as a temporary activation function for this constraint
+                                loss_c += torch.nn.functional.relu(torch.tensor(nc_loss, dtype=torch.float32)) * args.nc_lambda 
 
                                 optimizer_img.zero_grad()
                                 loss_c.backward()
-
                                 
                                 
                                 optimizer_img.step()
