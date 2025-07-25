@@ -86,6 +86,7 @@ def compute_info_no_loader(args, model, fc_features, image_syn, label_syn):
     mu_c_dict = dict()
 
     inputs, targets = image_syn.to(args.device), label_syn.to(args.device)
+    #print(f"target values: {targets}")
 
     with torch.no_grad():
         outputs = model(inputs)
@@ -93,16 +94,20 @@ def compute_info_no_loader(args, model, fc_features, image_syn, label_syn):
     features = fc_features.outputs[0][0]
     fc_features.clear()
     mu_G += torch.sum(features, dim=0)
+    print(f"features shape in compute_info_no_loader: {features.shape}")
+    print(f"targets shape: {targets.shape}")
     for b in range(len(targets)):
         y = targets[b].item()
         if y not in mu_c_dict:
+            print(f"b-value: {b}")
             mu_c_dict[y] = features[b, :]
         else:
             mu_c_dict[y] += features[b, :]
 
     mu_G /= image_syn.shape[0]
-    for i in range(10): # for each class in CIFAR10, normalize
-        mu_c_dict[i] /= args.ipc
+    for i in range(10):
+    	print(f"value of i: {i}")
+    	mu_c_dict[i] /= args.ipc
 
     return mu_G, mu_c_dict
 
@@ -313,8 +318,8 @@ def main():
         fc_features = FCFeatures()
         model_res.fc.register_forward_pre_hook(fc_features)
 
-        #net_path = r"/users/PAS2138/rolinaqu/2025 URAP Research/Code/IID/nc_model_weights/SGD_epoch_200.pth"
-        net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
+        net_path = r"/users/PAS2138/rolinaqu/2025 URAP Research/Code/IID/nc_model_weights/SGD_epoch_200.pth"
+        #net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
         
         state_dict = torch.load(net_path, map_location = 'cpu')
 
@@ -503,7 +508,7 @@ def main():
                 #net_path = r"C:\Users\plano\Documents\1-SCHOOL STUFF\2024-2025 Year 3\Research Stuff\Code\IID\IDM+ours\nn_models\SGD_epoch_200.pth"
                 net_path = r"/users/PAS2138/rolinaqu/2025 URAP Research/Code/IID/nc_model_weights/SGD_epoch_200.pth"
 
-                state_dict = torch.load(net_path, map_location = 'gpu')
+                state_dict = torch.load(net_path, map_location = 'cpu')
                 new_state_dict = {}
                 #verifies compatibility depending on state_dict (prepends 'module.') 
                 for key, value in state_dict.items():
@@ -630,7 +635,8 @@ def main():
                                 #calculate nc1 metrics using resnet18
                                 #new collapse function 
                                 #of note: this does calculate every CLASS, may be worth trying every complete run-through instead?
-                                collapse_2 = abs(compute_nc1(args, net_res, fc_features, image_syn, label_syn))
+                                print(f"label_syn values: {lab_syn}")
+                                collapse_2 = abs(compute_nc1(args, net_res, fc_features, img_syn, lab_syn))
                                 nc_loss = abs(collapse_metric - collapse_2) - args.nc_weight
                                 print(f"nc_loss: {nc_loss}")
 
