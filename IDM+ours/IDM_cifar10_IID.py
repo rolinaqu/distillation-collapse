@@ -84,9 +84,13 @@ def compute_Sigma_W(args, model, fc_features, mu_c_dict, dataloader, isTrain=Tru
 def compute_info_no_loader(args, model, fc_features, image_syn, label_syn):
     mu_G = 0
     mu_c_dict = dict()
+    #mu_c_dict = {i: torch.zeros(model.fc.in_features).to(args.device).detach() for i in range(10)} #testing out generating all keys first?
 
     inputs, targets = image_syn.to(args.device), label_syn.to(args.device)
     #print(f"target values: {targets}")
+    #according to deepseek, the problem here occurs because each image is being processed in a single batch, 
+    # resulting in mismatch of ipc between fc_features and image_syn because image_syn contains all classes (50 * 10 = 100)
+    #solution may be to run all classes through again to get full fc_features hook and then run compute_info?
 
     with torch.no_grad():
         outputs = model(inputs)
@@ -94,21 +98,20 @@ def compute_info_no_loader(args, model, fc_features, image_syn, label_syn):
     features = fc_features.outputs[0][0]
     fc_features.clear()
     mu_G += torch.sum(features, dim=0)
-    print(f"features shape in compute_info_no_loader: {features.shape}")
-    print(f"targets shape: {targets.shape}")
-    for b in range(len(targets)):
+    #print(f"features shape in compute_info_no_loader: {features.shape} features lengh: {len(features)}")
+    #print(f"targets shape: {targets.shape} targets size: {len(targets)}")
+    for b in range(len(features)):
         y = targets[b].item()
         if y not in mu_c_dict:
-            print(f"b-value: {b}")
+            #print(f"b-value: {b}")
             mu_c_dict[y] = features[b, :]
         else:
             mu_c_dict[y] += features[b, :]
 
     mu_G /= image_syn.shape[0]
     for i in range(10):
-    	print(f"value of i: {i}")
-    	mu_c_dict[i] /= args.ipc
-
+        #print(f"value of i: {i}")
+        mu_c_dict[i] /= args.ipc
     return mu_G, mu_c_dict
 
 
@@ -135,11 +138,11 @@ def compute_info(args, model, fc_features, dataloader, isTrain=True):
                 mu_c_dict[y] += features[b, :]
 
     if str.lower(args.dataset) == 'cifar10' or str.lower(args.dataset) == 'cifar10_random':
-        if isTrain:
+        if isTrain: #0.05-0.07
             mu_G /= sum(CIFAR10_TRAIN_SAMPLES)
             for i in range(len(CIFAR10_TRAIN_SAMPLES)):
                 mu_c_dict[i] /= CIFAR10_TRAIN_SAMPLES[i]
-        else:
+        else: #0.68
             mu_G /= sum(CIFAR10_TEST_SAMPLES)
             for i in range(len(CIFAR10_TEST_SAMPLES)):
                 mu_c_dict[i] /= CIFAR10_TEST_SAMPLES[i]
@@ -524,8 +527,10 @@ def main():
                 #calling embedding METHOD as a function
                 #embed_res = net_res.module.embed if torch.cuda.device_count() > 1 else net_res.embed
                 embed_res = net_res.embed #testload resnet function now has an embed method so this works
-                fc_features = FCFeatures()
-                net_res.fc.register_forward_pre_hook(fc_features)
+                fc_features2 = FCFeatures() #this ends up with an embedded shape of [50, 512] for some reason
+                net_res.fc.register_forward_pre_hook(fc_features2)
+
+                avg_nc = 0.0
 
                 ''' update synthetic data '''
                 if 'BN' not in args.model or args.model=='ConvNet_GBN': # for ConvNet
@@ -630,15 +635,17 @@ def main():
 
                                     loss_c += (syn_ce_loss * args.ce_weight)
 
-
-
                                 #calculate nc1 metrics using resnet18
                                 #new collapse function 
-                                #of note: this does calculate every CLASS, may be worth trying every complete run-through instead?
-                                print(f"label_syn values: {lab_syn}")
-                                collapse_2 = abs(compute_nc1(args, net_res, fc_features, img_syn, lab_syn))
-                                nc_loss = abs(collapse_metric - collapse_2) - args.nc_weight
-                                print(f"nc_loss: {nc_loss}")
+                                #print(f"label_syn values: {label_syn} label_syn shape: {label_syn.shape}")
+                                #print(f"image_syn shape: {image_syn.shape}")
+
+                                #experimenting with using model_res in here instead of net_res to get around the shape error
+                                collapse_2 = abs(compute_nc1(args, model_res, fc_features, image_syn, label_syn))
+                                #print(collapse_2)
+                                nc_loss = abs(collapse_metric - collapse_2) - args.nc_weight #nc_weight here being beta in the barrier constraint
+                                #print(f"nc_loss: {nc_loss}")
+                                avg_nc += nc_loss
 
                                 #using relu as a temporary activation function for this constraint
                                 loss_c += torch.nn.functional.relu(torch.tensor(nc_loss, dtype=torch.float32)) * args.nc_lambda 
@@ -647,10 +654,17 @@ def main():
                                 loss_c.backward()
                                 
                                 
-                                optimizer_img.step()
+                                optimizer_img.step() #weight update happens here 
                                 loss_cov_sum+=loss_cov.item()
                                 loss_std_sum+=loss_std.item()
                                 loss += loss_c.item()
+
+                        
+                            #optimizer_img.zero_grad()
+                            #loss_c.backward()
+                            #optimizer_img.step() #weight update happens here 
+                            
+                            
 
                         if image_sign == 'syn':
                             loss_avg += loss.item()
@@ -681,6 +695,7 @@ def main():
             if it%10 == 0:
                 print('%s iter = %04d, loss = syn:%.4f, net_list size = %s, metrics = syn:%.4f/real:%.4f, syn acc = syn:%.4f' % (get_time(), it, \
                     loss_avg, str(len(net_list)), metrics['syn'], metrics['real'], acc_avg['syn'].value()[0] if acc_avg['syn'].n!=0 else 0))
+                print(f"average nc_loss over last 10 iterations: {avg_nc/10}")
 
             if it == args.Iteration: # only record the final results
                 data_save.append([copy.deepcopy(image_syn.detach().cpu()), copy.deepcopy(label_syn.detach().cpu())])
