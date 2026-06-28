@@ -1,5 +1,5 @@
 # distillation-collapse
-Experimental methodology to combine dataset distillation methods with the principles of Neural Collapse as outlined by Zhu et al. in A Geometric Analysis of Neural Collapse with Unconstrained Features (https://doi.org/10.48550/arXiv.2105.02375) and Kothapali in Neural Collapse: A Review on Modelling Principles and Generalization (https://doi.org/10.48550/arXiv.2206.04041). Based off [Exploiting Inter-sample and Inter-feature Relations in Dataset Distillation by Deng et al](https://arxiv.org/pdf/2404.00563). 
+Experimental methodology to combine dataset distillation methods with the principles of Neural Collapse as outlined by Zhu et al. in [A Geometric Analysis of Neural Collapse with Unconstrained Features](https://doi.org/10.48550/arXiv.2105.02375) and Kothapali in [Neural Collapse: A Review on Modelling Principles and Generalization](https://doi.org/10.48550/arXiv.2206.04041). Based off [Exploiting Inter-sample and Inter-feature Relations in Dataset Distillation by Deng et al](https://arxiv.org/pdf/2404.00563). 
 
 
 # Abstract
